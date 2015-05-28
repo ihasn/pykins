@@ -1,62 +1,29 @@
 #!flask/bin/python
 from flask import Flask, jsonify, abort, make_response, request, url_for
-from flask.ext.httpauth import HTTPBasicAuth
+import psutil, platform
 
 app = Flask(__name__)
-auth = HTTPBasicAuth()
 
-tasks = [
-    {
-        'id': 1,
-        'title': u'Buy groceries',
-        'description': u'Milk, Cheese, Pizza, Fruit, Tylenol',
-        'done' : False
-    },
-    {
-        'id': 2,
-        'title': u'Learn Python',
-        'description': u'Need to find a good Python tutorial on the web',
-        'done': False
-    }
+@app.route('/pykins/api/v1.0/status', methods=['GET'])
+def get_status():
+    return jsonify({'status': True})
 
-]
-
-@auth.get_password
-def get_password(username):
-    if username == 'test':
-        return 'testtest'
-    return None
-
-@auth.error_handler
-def unauthorized():
-    return make_response(jsonify({'error': 'Unauthorized access'}), 401)
-
-def make_public_task(task):
-    new_task = {}
-    for field in task:
-        if field == 'id':
-            new_task['uri'] = url_for('get_task', task_id=task['id'], _external=True)
-        else:
-            new_task[field] = task[field]
-    return new_task
-
-@app.route('/todo/api/v1.0/tasks', methods=['GET'])
-@auth.login_required
-def get_tasks():
-    return jsonify({'tasks': [make_public_task(task) for task in tasks]})
-
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
-def get_task(task_id):
-    task = [task for task in tasks if task['id'] == task_id]
-    if len(task) == 0:
-        abort(404)
-    return jsonify({'task': task[0]})
+@app.route('/pykins/api/v1.0/health', methods=['GET'])
+def get_health():
+    if platform.system() == 'Linux':
+        health = jsonify({ 'cpu_percent': psutil.cpu_percent(),
+                        'memory_percent': psutil.virtual_memory().percent,
+                        'disk_usage': psutil.disk_usage('/').percent })
+    else:
+        health = jsonify({ 'cpu_percent': psutil.cpu_percent(),
+                        'memory_percent': psutil.virtual_memory().percent})
+    return health
 
 @app.errorhandler(404)
 def not_found(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-@app.route('/todo/api/v1.0/tasks', methods=['POST'])
+@app.route('/pykins/api/v1.0/tasks', methods=['POST'])
 def create_task():
     if not request.json or not 'title' in request.json:
         abort(400)
@@ -64,12 +31,12 @@ def create_task():
         'id': tasks[-1]['id'] + 1,
         'title': request.json['title'],
         'description': request.json.get('description', ""),
-        'done': False
+        'status': False
     }
     tasks.append(task)
     return jsonify({'task': task}), 201
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
+@app.route('/pykins/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
 def update_task(task_id):
     task = [task for task in tasks if task['id'] == task_id]
     if len(task) == 0:
@@ -80,14 +47,14 @@ def update_task(task_id):
         abort(400)
     if 'description' in request.json and type(request.json['description']) is not unicode:
         abort(400)
-    if 'done' in request.json and type(request.json['done']) is not bool:
+    if 'status' in request.json and type(request.json['status']) is not bool:
         abort(400)
     task[0]['title'] = request.json.get('title', task[0]['title'])
     task[0]['description'] = request.json.get('description', task[0]['description'])
-    task[0]['done'] = request.json.get('done', task[0]['done'])
+    task[0]['status'] = request.json.get('status', task[0]['status'])
     return jsonify({'task': task[0]})
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
+@app.route('/pykins/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
     task = [task for task in tasks if task['id'] == task_id]
     if len(task) == 0:
